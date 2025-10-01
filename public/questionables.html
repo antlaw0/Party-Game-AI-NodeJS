@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Questionables</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    .hidden { display: none; }
+    .player-list { margin-top: 10px; }
+    .btn { margin: 6px 0; padding: 6px 10px; }
+    #live-region { position: absolute; left: -9999px; }
+    #voteOptions button[disabled] { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <h1>Questionables</h1>
+
+  <div id="live-region" aria-live="polite"></div>
+
+  <!-- Menu -->
+  <div id="menuView">
+    <button id="toCreate" class="btn">Create Game</button>
+    <button id="toJoin" class="btn">Join Game</button>
+  </div>
+
+  <!-- Create -->
+  <div id="createView" class="hidden" role="region" aria-label="Create Game">
+    <h2>Create Game</h2>
+    <label>Player name: <input id="creatorName" type="text" aria-label="Creator name"></label><br>
+    <label>Number of rounds: <input id="rounds" type="number" min="1" value="3" aria-label="Number of rounds"></label><br>
+    <button id="createBtn" class="btn">Create Game</button>
+    <button id="backFromCreate" class="btn">Back</button>
+  </div>
+
+  <!-- Join -->
+  <div id="joinView" class="hidden" role="region" aria-label="Join Game">
+    <h2>Join Game</h2>
+    <label>Game code: <input id="joinCode" maxlength="4" style="text-transform:uppercase;" aria-label="Game code"></label><br>
+    <label>Player name: <input id="joinName" type="text" aria-label="Joiner name"></label><br>
+    <button id="joinBtn" class="btn">Join Game</button>
+    <button id="backFromJoin" class="btn">Back</button>
+  </div>
+
+  <!-- Lobby -->
+  <div id="lobbyView" class="hidden" role="region" aria-label="Lobby">
+    <h2>Lobby - <span id="gameTitle">Questionables</span></h2>
+    <p>Game code: <strong id="gameCode"></strong></p>
+    <p>Round: <span id="roundInfo"></span></p>
+    <h3>Players</h3>
+    <ul id="playerList" class="player-list"></ul>
+    <button id="startBtn" class="btn hidden">Start Game</button>
+    <button id="exitLobbyBtn" class="btn">Exit to Home</button>
+  </div>
+
+  <!-- Question -->
+  <div id="questionView" class="hidden" role="region" aria-live="polite">
+    <h2 id="questionHeader">Question</h2>
+    <p id="questionText"></p>
+    <label for="answerInput">Your answer:</label><br>
+    <input id="answerInput" type="text" aria-label="Answer input"><br>
+    <button id="submitAnswerBtn" class="btn">Submit Answer</button>
+    <p id="waitingForOthersQ" class="hidden">Waiting for other players to submit answers...</p>
+  </div>
+
+  <!-- Voting -->
+  <div id="votingView" class="hidden" role="region" aria-live="polite">
+    <h2>Vote for your favorite answer</h2>
+    <p id="votePrompt"></p>
+    <div id="voteOptions" aria-label="Voting options"></div>
+    <p id="waitingForOthersV" class="hidden">Waiting for other players to vote...</p>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsView" class="hidden" role="region" aria-live="polite">
+    <h2>Round Results</h2>
+    <p id="resultsPrompt"></p>
+    <ul id="resultsList"></ul>
+    <button id="continueBtn" class="btn hidden">Continue</button>
+  </div>
+
+  <!-- Final -->
+  <div id="finalView" class="hidden" role="region" aria-live="polite">
+    <h2>Final Results</h2>
+    <ul id="finalScores"></ul>
+    <button id="returnHome" class="btn">Return to Home</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // UI helpers
+    function show(viewId, message) {
+      document.querySelectorAll("div[id$='View']").forEach(v => v.classList.add("hidden"));
+      document.getElementById(viewId).classList.remove("hidden");
+      if (message) announce(message);
+    }
+    function announce(msg) {
+      const lr = document.getElementById("live-region");
+      lr.innerText = "";
+      setTimeout(() => { lr.innerText = msg; }, 50);
+      console.log("[announce]", msg);
+    }
+
+    // socket setup
+    const socket = io("/game"); // uses constants.SOCKET_NAMESPACE = "/game"
+
+    // local UI state
+    let client = { socketId: null, name: null, isLeader: false, code: null };
+    let votingOptions = []; // array of { ownerId, text }
+
+    // hookup UI elements
+    const toCreate = document.getElementById("toCreate");
+    const toJoin = document.getElementById("toJoin");
+    const backFromCreate = document.getElementById("backFromCreate");
+    const backFromJoin = document.getElementById("backFromJoin");
+    const createBtn = document.getElementById("createBtn");
+    const joinBtn = document.getElementById("joinBtn");
+    const exitLobbyBtn = document.getElementById("exitLobbyBtn");
+    const startBtn = document.getElementById("startBtn");
+    const submitAnswerBtn = document.getElementById("submitAnswerBtn");
+    const voteOptionsDiv = document.getElementById("voteOptions");
+    const continueBtn = document.getElementById("continueBtn");
+    const returnHome = document.getElementById("returnHome");
+
+    toCreate.addEventListener("click", () => show("createView"));
+    toJoin.addEventListener("click", () => show("joinView"));
+    backFromCreate.addEventListener("click", () => show("menuView"));
+    backFromJoin.addEventListener("click", () => show("menuView"));
+
+    createBtn.addEventListener("click", () => {
+      const name = document.getElementById("creatorName").value.trim();
+      const rounds = parseInt(document.getElementById("rounds").value, 10) || 3;
+      if (!name) { alert("Enter your name"); return; }
+      socket.emit("create_game", { name, rounds });
+    });
+
+    joinBtn.addEventListener("click", () => {
+      const code = document.getElementById("joinCode").value.trim().toUpperCase();
+      const name = document.getElementById("joinName").value.trim();
+      if (!code || !name) { alert("Enter code and name"); return; }
+      socket.emit("join_game", { code, name });
+    });
+
+    exitLobbyBtn.addEventListener("click", () => {
+      // simple "logout" - refresh to go back to home
+      window.location.href = "/index.html";
+    });
+
+    startBtn.addEventListener("click", () => {
+      socket.emit("start_game");
+    });
+
+    submitAnswerBtn.addEventListener("click", () => {
+      const answer = document.getElementById("answerInput").value.trim();
+      if (!answer) { alert("Enter an answer"); return; }
+      socket.emit("submit_answer", { answer });
+      // local UI disable until server ack
+      document.getElementById("answerInput").disabled = true;
+      submitAnswerBtn.disabled = true;
+      document.getElementById("waitingForOthersQ").classList.remove("hidden");
+    });
+
+    continueBtn.addEventListener("click", () => {
+      socket.emit("continue_game");
+    });
+
+    returnHome.addEventListener("click", () => {
+      window.location.href = "/index.html";
+    });
+
+    // Socket event handlers
+    socket.on("connect", () => {
+      client.socketId = socket.id;
+      console.log("Connected as", socket.id);
+    });
+
+    socket.on("error_message", (p) => {
+      console.warn("Server error:", p);
+      alert("Server error: " + (p.error || JSON.stringify(p)));
+    });
+
+    socket.on("session_created", (lobby) => {
+      client.code = lobby.code;
+      client.isLeader = lobby.players.some(p => p.socketId === client.socketId && p.isLeader);
+      updateLobbyUI(lobby);
+      show("lobbyView", `Game ${lobby.code} created. You are the leader.`);
+    });
+
+    socket.on("joined_session", (lobby) => {
+      client.code = lobby.code;
+      client.isLeader = lobby.players.some(p => p.socketId === client.socketId && p.isLeader);
+      updateLobbyUI(lobby);
+      show("lobbyView", `Joined game ${lobby.code}. Waiting in lobby.`);
+    });
+
+    socket.on("player_left", ({ socketId, lobby }) => {
+      updateLobbyUI(lobby);
+      announce("A player has left the lobby.");
+    });
+
+    socket.on("round_started", ({ prompt, round }) => {
+      // show question UI
+      document.getElementById("questionText").innerText = prompt;
+      document.getElementById("answerInput").value = "";
+      document.getElementById("answerInput").disabled = false;
+      submitAnswerBtn.disabled = false;
+      document.getElementById("waitingForOthersQ").classList.add("hidden");
+      document.getElementById("roundInfo").innerText = `${round} of ${document.getElementById("rounds") ? document.getElementById("rounds").value : "?"}`;
+      show("questionView", "New question: " + prompt);
+    });
+
+    socket.on("player_submitted", (p) => {
+      announce("A player has submitted an answer.");
+    });
+
+    socket.on("answer_received", () => {
+      // ack received — already showing waiting state
+      announce("Your answer was received.");
+    });
+
+    socket.on("voting_start", (payload) => {
+      // payload.options = [{ ownerId, text }, ...]
+      votingOptions = payload.options || [];
+      voteOptionsDiv.innerHTML = "";
+      votingOptions.forEach((opt, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.innerText = opt.text;
+        btn.setAttribute("data-owner", opt.ownerId);
+        btn.addEventListener("click", (ev) => {
+          // submit vote
+          socket.emit("submit_vote", { ownerId: opt.ownerId });
+          // disable buttons and show waiting
+          Array.from(voteOptionsDiv.querySelectorAll("button")).forEach(b => b.disabled = true);
+          document.getElementById("waitingForOthersV").classList.remove("hidden");
+        });
+        voteOptionsDiv.appendChild(btn);
+      });
+      document.getElementById("waitingForOthersV").classList.add("hidden");
+      show("votingView", "Voting has started. Choose your favorite answer.");
+    });
+
+    socket.on("vote_received", () => announce("Your vote was received."));
+
+    socket.on("player_voted", () => announce("A player has voted."));
+
+    socket.on("round_results", (payload) => {
+      const results = payload.results || [];
+      const resultsList = document.getElementById("resultsList");
+      resultsList.innerHTML = "";
+      results.forEach(r => {
+        const li = document.createElement("li");
+        li.innerText = `${r.name} — ${r.votes} vote(s) — total score: ${r.score}`;
+        resultsList.appendChild(li);
+      });
+      // Only show continue button to current leader (server will validate)
+      // We will check gently by re-fetching lobby data (server didn't send updated lobby here).
+      // For simplicity: request lobby state by joining again (hack) or rely on server events in real use.
+      // For now, show continue only if client was leader when session created/joined.
+      if (client.isLeader) {
+        continueBtn.classList.remove("hidden");
+      } else {
+        continueBtn.classList.add("hidden");
+      }
+      show("resultsView", "Round results are displayed.");
+    });
+
+    socket.on("final_results", (payload) => {
+      const list = document.getElementById("finalScores");
+      list.innerHTML = "";
+      (payload.finalScores || []).forEach(p => {
+        const li = document.createElement("li");
+        li.innerText = `${p.name} — ${p.score} points`;
+        list.appendChild(li);
+      });
+      show("finalView", "Game over. Final results are displayed.");
+    });
+
+    socket.on("session_ended", (p) => {
+      announce("Session ended: " + (p.reason || "unknown"));
+      show("menuView");
+    });
+
+    // update lobby UI helper
+    function updateLobbyUI(lobby) {
+      document.getElementById("gameCode").innerText = lobby.code;
+      const list = document.getElementById("playerList");
+      list.innerHTML = "";
+      lobby.players.forEach(p => {
+        const li = document.createElement("li");
+        li.innerText = p.name + (p.isLeader ? " (game leader)" : "");
+        list.appendChild(li);
+        if (p.socketId === socket.id) {
+          client.name = p.name;
+          client.isLeader = p.isLeader;
+        }
+      });
+      // show/hide start button
+      if (client.isLeader) {
+        startBtn.classList.remove("hidden");
+      } else {
+        startBtn.classList.add("hidden");
+      }
+      document.getElementById("roundInfo").innerText = `${lobby.currentRound} of ${lobby.rounds}`;
+    }
+
+    // initial view
+    show("menuView");
+  </script>
+</body>
+</html>

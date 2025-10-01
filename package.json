@@ -1,0 +1,31 @@
+{
+    "name": "jackbox-style-party-game",
+    "version": "1.0.0",
+    "description": "Custom web-based party game platform",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "npx nodemon server.js"
+    },
+    "dependencies": {
+        "express": "^4.21.2",
+        "socket.io": "^4.8.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.10"
+    },
+    "directories": {
+        "lib": "lib"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/antlaw0/Party-Game-AI-NodeJS.git"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/antlaw0/Party-Game-AI-NodeJS/issues"
+    },
+    "homepage": "https://github.com/antlaw0/Party-Game-AI-NodeJS#readme"
+}
