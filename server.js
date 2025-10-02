@@ -12,9 +12,9 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
 // Serve static files
-app.use(express.static(path.join(__dirname, 'public'))); // for your main static files
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
-app.use('/lib', express.static(path.join(__dirname, 'lib'))); // exposes /lib folder
+app.use('/lib', express.static(path.join(__dirname, 'lib')));
 
 // === In-memory session ===
 let currentSession = null;
@@ -50,6 +50,14 @@ io.on('connection', (socket) => {
     }
 
     const joinCode = generateJoinCode();
+    let prompt;
+    try {
+      prompt = await generatePrompt("questionables");
+    } catch (err) {
+      console.error("Groq error during game creation:", err);
+      prompt = "Default prompt (Groq failed)";
+    }
+
     currentSession = {
       joinCode,
       leaderId: socket.id,
@@ -58,7 +66,7 @@ io.on('connection', (socket) => {
       players: [{ id: socket.id, name: playerName + " (game leader)", score: 0 }],
       answers: {},
       votes: {},
-      prompt: await generatePrompt("questionables")
+      prompt
     };
 
     socket.join(joinCode);
@@ -66,22 +74,22 @@ io.on('connection', (socket) => {
   });
 
   // Join Game
-socket.on('joinGame', ({ playerName, joinCode }) => {
-  if (!currentSession || joinCode !== currentSession.joinCode) {
-    socket.emit('errorMsg', 'Invalid game code.');
-    return;
-  }
+  socket.on('joinGame', ({ playerName, joinCode }) => {
+    if (!currentSession || joinCode !== currentSession.joinCode) {
+      socket.emit('errorMsg', 'Invalid game code.');
+      return;
+    }
 
-  const player = { id: socket.id, name: playerName, score: 0 };
-  currentSession.players.push(player);
-  socket.join(joinCode);
+    const player = { id: socket.id, name: playerName, score: 0 };
+    currentSession.players.push(player);
+    socket.join(joinCode);
 
-  // Update everyone in lobby, including the new player
-  io.to(joinCode).emit('updateLobby', currentSession.players);
+    // Update lobby for all
+    io.to(joinCode).emit('updateLobby', currentSession.players);
 
-  // Also send confirmation to the joining player
-  socket.emit('gameJoined', { joinCode, players: currentSession.players });
-});
+    // Confirm to joining player
+    socket.emit('gameJoined', { joinCode, players: currentSession.players });
+  });
 
   // Start Game (leader only)
   socket.on('startGame', () => {
@@ -98,9 +106,7 @@ socket.on('joinGame', ({ playerName, joinCode }) => {
     if (!currentSession) return;
     currentSession.answers[socket.id] = answer;
 
-    // Check if all players have answered
     if (Object.keys(currentSession.answers).length === currentSession.players.length) {
-      // Send answers to voting phase
       io.to(currentSession.joinCode).emit('startVoting', {
         prompt: currentSession.prompt,
         answers: Object.values(currentSession.answers)
@@ -117,7 +123,6 @@ socket.on('joinGame', ({ playerName, joinCode }) => {
 
     currentSession.votes[socket.id] = answer;
 
-    // Check if all players voted
     if (Object.keys(currentSession.votes).length === currentSession.players.length) {
       // Calculate results
       const results = {};
@@ -129,7 +134,7 @@ socket.on('joinGame', ({ playerName, joinCode }) => {
       currentSession.players.forEach(p => {
         const playerAnswer = currentSession.answers[p.id];
         if (results[playerAnswer]) {
-          p.score += results[playerAnswer]; // 1 vote = 1 point
+          p.score += results[playerAnswer];
         }
       });
 
@@ -156,7 +161,15 @@ socket.on('joinGame', ({ playerName, joinCode }) => {
 
     if (currentSession.currentRound < currentSession.numRounds) {
       currentSession.currentRound++;
-      const prompt = await generatePrompt("questionables");
+
+      let prompt;
+      try {
+        prompt = await generatePrompt("questionables");
+      } catch (err) {
+        console.error("Groq error during continueGame:", err);
+        prompt = "Default prompt (Groq failed)";
+      }
+
       currentSession.answers = {};
       currentSession.prompt = prompt;
 
@@ -171,17 +184,16 @@ socket.on('joinGame', ({ playerName, joinCode }) => {
 
       io.to(currentSession.joinCode).emit('finalResults', { finalScores });
 
-      // Reset session for next game
       currentSession = null;
     }
   });
 
+  // Disconnect
   socket.on('disconnect', () => {
     console.log(`Disconnected: ${socket.id}`);
     if (!currentSession) return;
 
-    currentSession.players = currentSession.players.filter(p => p.id !== socket.id);
-
+    currentSession.players
     if (socket.id === currentSession.leaderId) {
       io.to(currentSession.joinCode).emit('errorMsg', 'Leader left, game ended.');
       currentSession = null;
