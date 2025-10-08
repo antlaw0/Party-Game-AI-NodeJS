@@ -266,8 +266,25 @@ socket.on('roundResults', ({ prompt, answers, round }) => {
 });
 
 continueBtn.addEventListener('click', () => {
-  socket.emit('continueGame');
+  //socket.emit('continueGame');
+  socket.emit('nextRound');
+  
 });
+
+socket.on('finalResults', ({ players }) => {
+  resultsStage.classList.add('hidden');
+  finalResultsStage.classList.remove('hidden');
+
+  finalScores.innerHTML = '';
+  players.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = `${p.name}: ${p.score}`;
+    finalScores.appendChild(li);
+  });
+
+  announce('Final scores displayed.');
+});
+
 
 // --- Final Results ---
 socket.on('finalResults', ({ finalScores: scores }) => {

@@ -202,6 +202,54 @@ io.on('connection', (socket) => {
     }
   });
 
+// --- Next Round (Leader only) ---
+socket.on('nextRound', async () => {
+  try {
+    if (!currentSession) return;
+    if (socket.id !== currentSession.leaderId) return;
+
+    currentSession.currentRound++;
+
+    // If all rounds complete → Final Results
+    if (currentSession.currentRound > currentSession.numRounds) {
+      console.log('Game complete, sending final results');
+      io.to(currentSession.joinCode).emit('finalResults', {
+        players: currentSession.players
+      });
+      currentSession = null;
+      return;
+    }
+
+    // Reset round data
+    currentSession.answers = {};
+    currentSession.votes = {};
+    currentSession.answerStage = true;
+    currentSession.votingStage = false;
+
+    // New question
+    let prompt;
+    try {
+      prompt = await generatePrompt("questionables");
+      if (!prompt || prompt.startsWith("Default prompt")) prompt = getRandomUnusedQuestion();
+    } catch (err) {
+      console.error("Groq error:", err);
+      prompt = getRandomUnusedQuestion();
+    }
+    currentSession.prompt = prompt;
+
+    // Update player statuses
+    currentSession.players.forEach(p => updatePlayerStatus(currentSession, p.id, 'Answering'));
+    broadcastPlayerStates(currentSession);
+
+    io.to(currentSession.joinCode).emit('newQuestion', {
+      round: currentSession.currentRound,
+      prompt: currentSession.prompt
+    });
+  } catch (err) {
+    console.error('Error in nextRound:', err);
+  }
+});
+
   // --- Disconnect ---
   socket.on('disconnect', () => {
     console.log(`Disconnected: ${socket.id}`);
