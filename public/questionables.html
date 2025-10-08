@@ -90,7 +90,9 @@
   </div>
 
   <script>
-const socket = io();
+const socket = io(window.location.origin, {
+  transports: ['websocket', 'polling']
+});
 
 const liveRegion = document.getElementById('liveRegion');
 function announce(message) {
@@ -285,26 +287,6 @@ socket.on('finalResults', ({ players }) => {
   announce('Final scores displayed.');
 });
 
-
-// --- Final Results ---
-socket.on('finalResults', ({ finalScores: scores }) => {
-  resultsStage.classList.add('hidden');
-  finalResultsStage.classList.remove('hidden');
-
-  finalScores.innerHTML = '';
-  scores.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = `${p.name}: ${p.score}`;
-    finalScores.appendChild(li);
-  });
-
-  announce('Final scores displayed.');
-});
-
-returnHomeBtn.addEventListener('click', () => {
-  finalResultsStage.classList.add('hidden');
-  gameSetup.classList.remove('hidden');
-});
 
 // --- Error ---
 socket.on('errorMsg', (msg) => alert(msg));
