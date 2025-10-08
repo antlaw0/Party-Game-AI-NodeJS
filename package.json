@@ -9,6 +9,7 @@
         "dev": "npx nodemon server.js"
     },
     "dependencies": {
+        "better-sqlite3": "^12.4.1",
         "express": "^4.21.2",
         "groq-js": "^1.0.0",
         "node-fetch": "^2.7.0",

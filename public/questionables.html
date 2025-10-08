@@ -13,6 +13,16 @@
 </head>
 <body>
 
+<!-- Persistent Player Status List -->
+<h3>Player Status</h3>
+<ul id="playerStatusList"></ul>
+
+<div id="waiting-section" style="display: none;">
+  <h2>Waiting for others to answer...</h2>
+  <ul id="answer-status-list"></ul>
+  <button id="continue-btn" style="display: none;">Continue</button>
+</div>
+
   <!-- NVDA Live Region -->
   <div id="liveRegion" class="live-region" aria-live="polite"></div>
 
@@ -49,7 +59,11 @@
     <p id="prompt"></p>
     <label>Your Answer: <input id="answerInput" type="text"></label>
     <button id="submitAnswerBtn">Submit Answer</button>
-    <p id="waitingAnswer" class="hidden">Waiting for others to answer...</p>
+  <p id="waitingAnswer" class="hidden">
+  Waiting for others to answer...
+</p>
+<ul id="answerStatusList" class="hidden"></ul>
+
   </div>
 
   <!-- Voting -->
@@ -76,215 +90,209 @@
   </div>
 
   <script>
-    const socket = io();
+const socket = io();
 
-    const liveRegion = document.getElementById('liveRegion');
+const liveRegion = document.getElementById('liveRegion');
+function announce(message) {
+  liveRegion.textContent = message;
+}
 
-    function announce(message) {
-      liveRegion.textContent = message;
-    }
+// Sections
+const gameSetup = document.getElementById('gameSetup');
+const createGameBtn = document.getElementById('createGameBtn');
+const joinGameBtn = document.getElementById('joinGameBtn');
+const lobby = document.getElementById('lobby');
+const playerList = document.getElementById('playerList');
+const lobbyCode = document.getElementById('lobbyCode');
+const startGameBtn = document.getElementById('startGameBtn');
+const questionStage = document.getElementById('questionStage');
+const currentRoundEl = document.getElementById('currentRound');
+const promptEl = document.getElementById('prompt');
+const answerInput = document.getElementById('answerInput');
+const submitAnswerBtn = document.getElementById('submitAnswerBtn');
+const waitingAnswer = document.getElementById('waitingAnswer');
 
-    // Sections
-    const gameSetup = document.getElementById('gameSetup');
-    const createGameBtn = document.getElementById('createGameBtn');
-    const joinGameBtn = document.getElementById('joinGameBtn');
-    const lobby = document.getElementById('lobby');
-    const playerList = document.getElementById('playerList');
-    const lobbyCode = document.getElementById('lobbyCode');
-    const startGameBtn = document.getElementById('startGameBtn');
-    const questionStage = document.getElementById('questionStage');
-    const currentRoundEl = document.getElementById('currentRound');
-    const promptEl = document.getElementById('prompt');
-    const answerInput = document.getElementById('answerInput');
-    const submitAnswerBtn = document.getElementById('submitAnswerBtn');
-    const waitingAnswer = document.getElementById('waitingAnswer');
-    const votingStage = document.getElementById('votingStage');
-    const votingPrompt = document.getElementById('votingPrompt');
-    const voteButtons = document.getElementById('voteButtons');
-    const waitingVote = document.getElementById('waitingVote');
-    const resultsStage = document.getElementById('resultsStage');
-    const resultsPrompt = document.getElementById('resultsPrompt');
-    const resultsList = document.getElementById('resultsList');
-    const continueBtn = document.getElementById('continueBtn');
-    const finalResultsStage = document.getElementById('finalResultsStage');
-    const finalScores = document.getElementById('finalScores');
-    const returnHomeBtn = document.getElementById('returnHomeBtn');
+const votingStage = document.getElementById('votingStage');
+const votingPrompt = document.getElementById('votingPrompt');
+const voteButtons = document.getElementById('voteButtons');
+const waitingVote = document.getElementById('waitingVote');
 
-    let myPlayerId;
-    let isLeader = false;
+const resultsStage = document.getElementById('resultsStage');
+const resultsPrompt = document.getElementById('resultsPrompt');
+const resultsList = document.getElementById('resultsList');
+const continueBtn = document.getElementById('continueBtn');
 
-    // Create Game
-    createGameBtn.addEventListener('click', () => {
-      const playerName = document.getElementById('createName').value.trim();
-      const numRounds = parseInt(document.getElementById('numRounds').value, 10) || 3;
-      if (!playerName) return alert('Enter a player name.');
-      socket.emit('createGame', { playerName, numRounds });
-    });
+const finalResultsStage = document.getElementById('finalResultsStage');
+const finalScores = document.getElementById('finalScores');
+const returnHomeBtn = document.getElementById('returnHomeBtn');
 
-    // Join Game
-    joinGameBtn.addEventListener('click', () => {
-      const playerName = document.getElementById('joinName').value.trim();
-      const joinCode = document.getElementById('joinCode').value.trim().toUpperCase();
-      if (!playerName || !joinCode) return alert('Enter a name and join code.');
-      socket.emit('joinGame', { playerName, joinCode });
-    });
+const playerStatusList = document.getElementById('playerStatusList');
 
-    // Lobby updates
-    socket.on('gameCreated', ({ joinCode, players }) => {
-      myPlayerId = socket.id;
-      isLeader = true;
-      gameSetup.classList.add('hidden');
-      lobby.classList.remove('hidden');
-      lobbyCode.textContent = joinCode;
-      updateLobby(players);
-      startGameBtn.classList.remove('hidden');
-      announce(`Game created. Join code is ${joinCode}`);
-    });
-socket.on('gameJoined', ({ joinCode, players }) => {
+let myPlayerId;
+let isLeader = false;
+
+// --- Game Setup ---
+createGameBtn.addEventListener('click', () => {
+  const playerName = document.getElementById('createName').value.trim();
+  const numRounds = parseInt(document.getElementById('numRounds').value, 10) || 3;
+  if (!playerName) return alert('Enter a player name.');
+  socket.emit('createGame', { playerName, numRounds });
+});
+
+joinGameBtn.addEventListener('click', () => {
+  const playerName = document.getElementById('joinName').value.trim();
+  const joinCode = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (!playerName || !joinCode) return alert('Enter a name and join code.');
+  socket.emit('joinGame', { playerName, joinCode });
+});
+
+// --- Lobby ---
+socket.on('gameCreated', ({ joinCode, players }) => {
   myPlayerId = socket.id;
-  isLeader = false; // joined player is never leader
+  isLeader = true;
   gameSetup.classList.add('hidden');
   lobby.classList.remove('hidden');
   lobbyCode.textContent = joinCode;
-  updateLobby(players);
-  startGameBtn.classList.add('hidden'); // only leader sees this
+  startGameBtn.classList.remove('hidden');
+  announce(`Game created. Join code is ${joinCode}`);
+});
+
+socket.on('gameJoined', ({ joinCode }) => {
+  myPlayerId = socket.id;
+  isLeader = false;
+  gameSetup.classList.add('hidden');
+  lobby.classList.remove('hidden');
+  lobbyCode.textContent = joinCode;
+  startGameBtn.classList.add('hidden');
   announce(`Joined game. Code is ${joinCode}`);
 });
 
-// --- updateLobby cleanup ---
-function updateLobby(players) {
-  playerList.innerHTML = '';
-  players.forEach(p => {
-    const li = document.createElement('li');
-    li.textContent = p.name; // server already tags leader
-    playerList.appendChild(li);
-  });
-}
-
-socket.on('errorMsg', (msg) => {
-  alert(msg);
+startGameBtn.addEventListener('click', () => {
+  socket.emit('startGame');
 });
 
+// --- Persistent Player Status ---
+socket.on('updatePlayerStates', (players) => {
+  playerStatusList.innerHTML = '';
+  let waitingCount = 0;
 
-    socket.on('updateLobby', (players) => {
-      updateLobby(players);
-    });
+  players.forEach(p => {
+    const li = document.createElement('li');
+    let statusText = '';
 
-    function updateLobby(players) {
-      playerList.innerHTML = '';
-      players.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = p.name + (p.isLeader ? " (game leader)" : "");
-        playerList.appendChild(li);
-      });
-    }
+    if (!p.connected) statusText = '❌ Disconnected';
+    else if (p.status === 'Answering') statusText = '⏳ Answering';
+    else if (p.status === 'Voting') statusText = '⏳ Voting';
+    else if (p.status === 'Waiting for others to Answer') statusText = '✅ Answered';
+    else if (p.status === 'Waiting for others to Vote') statusText = '✅ Voted';
+    else statusText = 'Ready';
 
-    startGameBtn.addEventListener('click', () => {
-      socket.emit('startGame');
-    });
+    li.textContent = `${p.name}${p.isLeader ? ' (Leader)' : ''}: ${statusText}`;
+    playerStatusList.appendChild(li);
 
-    // Question stage
-    socket.on('newQuestion', ({ round, prompt }) => {
-      lobby.classList.add('hidden');
-      resultsStage.classList.add('hidden');
-      votingStage.classList.add('hidden');
-      questionStage.classList.remove('hidden');
+    if (statusText.includes('⏳')) waitingCount++;
+  });
 
-      currentRoundEl.textContent = round;
-      promptEl.textContent = prompt;
-      answerInput.value = '';
-      answerInput.disabled = false;
-      submitAnswerBtn.disabled = false;
-      waitingAnswer.classList.add('hidden');
+  // Announce for screen reader
+  if (waitingCount === 0) announce('All players are ready.');
+  else announce(`${waitingCount} players are still responding.`);
+});
 
-      announce(`Round ${round} question: ${prompt}`);
-    });
+// --- Question Stage ---
+socket.on('newQuestion', ({ round, prompt }) => {
+  lobby.classList.add('hidden');
+  resultsStage.classList.add('hidden');
+  votingStage.classList.add('hidden');
+  questionStage.classList.remove('hidden');
 
-    submitAnswerBtn.addEventListener('click', () => {
-      const answer = answerInput.value.trim();
-      if (!answer) return;
-      socket.emit('submitAnswer', { answer });
-      answerInput.disabled = true;
-      submitAnswerBtn.disabled = true;
-      waitingAnswer.classList.remove('hidden');
-      announce('Answer submitted. Waiting for others.');
-    });
+  currentRoundEl.textContent = round;
+  promptEl.textContent = prompt;
+  answerInput.value = '';
+  answerInput.disabled = false;
+  submitAnswerBtn.disabled = false;
+  waitingAnswer.classList.add('hidden');
 
-    socket.on('waitingForPlayers', () => {
-      waitingAnswer.classList.remove('hidden');
-    });
+  announce(`Round ${round} question: ${prompt}`);
+});
 
-    // Voting stage
-    socket.on('startVoting', ({ prompt, answers }) => {
-      questionStage.classList.add('hidden');
-      votingStage.classList.remove('hidden');
+submitAnswerBtn.addEventListener('click', () => {
+  const answer = answerInput.value.trim();
+  if (!answer) return;
+  socket.emit('submitAnswer', { answer });
+  answerInput.disabled = true;
+  submitAnswerBtn.disabled = true;
+  waitingAnswer.classList.remove('hidden');
+  announce('Answer submitted. Waiting for others.');
+});
 
-      votingPrompt.textContent = prompt;
-      voteButtons.innerHTML = '';
-      waitingVote.classList.add('hidden');
+// --- Voting Stage ---
+socket.on('startVoting', ({ prompt, answers }) => {
+  questionStage.classList.add('hidden');
+  votingStage.classList.remove('hidden');
+  votingPrompt.textContent = prompt;
+  voteButtons.innerHTML = '';
+  waitingVote.classList.add('hidden');
 
-      answers.forEach(a => {
-        const btn = document.createElement('button');
-        btn.textContent = a;
-        btn.addEventListener('click', () => {
-          socket.emit('submitVote', { answer: a });
-          Array.from(voteButtons.children).forEach(b => b.disabled = true);
-          waitingVote.classList.remove('hidden');
-          announce(`You voted. Waiting for others.`);
-        });
-        voteButtons.appendChild(btn);
-      });
-
-      announce(`Voting started for question: ${prompt}`);
-    });
-
-    socket.on('waitingForVotes', () => {
+  answers.forEach(a => {
+    const btn = document.createElement('button');
+    btn.textContent = a;
+    btn.addEventListener('click', () => {
+      socket.emit('submitVote', { answer: a });
+      Array.from(voteButtons.children).forEach(b => b.disabled = true);
       waitingVote.classList.remove('hidden');
+      announce('You voted. Waiting for others.');
     });
+    voteButtons.appendChild(btn);
+  });
 
-    // Round results
-    socket.on('roundResults', ({ prompt, answers, round, totalRounds }) => {
-      votingStage.classList.add('hidden');
-      resultsStage.classList.remove('hidden');
+  announce(`Voting started for question: ${prompt}`);
+});
 
-      resultsPrompt.textContent = prompt;
-      resultsList.innerHTML = '';
-      answers.forEach(a => {
-        const li = document.createElement('li');
-        li.textContent = `${a.name}: ${a.answer} (${a.votes} votes)`;
-        resultsList.appendChild(li);
-      });
+// --- Round Results ---
+socket.on('roundResults', ({ prompt, answers, round }) => {
+  votingStage.classList.add('hidden');
+  resultsStage.classList.remove('hidden');
 
-      if (isLeader) continueBtn.classList.remove('hidden');
-      else continueBtn.classList.add('hidden');
+  resultsPrompt.textContent = prompt;
+  resultsList.innerHTML = '';
+  answers.forEach(a => {
+    const li = document.createElement('li');
+    li.textContent = `${a.name}: ${a.answer} (${a.votes} votes)`;
+    resultsList.appendChild(li);
+  });
 
-      announce(`Round ${round} results displayed.`);
-    });
+  continueBtn.style.display = isLeader ? 'block' : 'none';
+  announce(`Round ${round} results displayed.`);
+});
 
-    continueBtn.addEventListener('click', () => {
-      socket.emit('continueGame');
-    });
+continueBtn.addEventListener('click', () => {
+  socket.emit('continueGame');
+});
 
-    // Final results
-    socket.on('finalResults', ({ finalScores: scores }) => {
-      resultsStage.classList.add('hidden');
-      finalResultsStage.classList.remove('hidden');
+// --- Final Results ---
+socket.on('finalResults', ({ finalScores: scores }) => {
+  resultsStage.classList.add('hidden');
+  finalResultsStage.classList.remove('hidden');
 
-      finalScores.innerHTML = '';
-      scores.forEach(p => {
-        const li = document.createElement('li');
-        li.textContent = `${p.name}: ${p.score}`;
-        finalScores.appendChild(li);
-      });
+  finalScores.innerHTML = '';
+  scores.forEach(p => {
+    const li = document.createElement('li');
+    li.textContent = `${p.name}: ${p.score}`;
+    finalScores.appendChild(li);
+  });
 
-      announce('Final scores displayed.');
-    });
+  announce('Final scores displayed.');
+});
 
-    returnHomeBtn.addEventListener('click', () => {
-      finalResultsStage.classList.add('hidden');
-      gameSetup.classList.remove('hidden');
-    });
-  </script>
+returnHomeBtn.addEventListener('click', () => {
+  finalResultsStage.classList.add('hidden');
+  gameSetup.classList.remove('hidden');
+});
+
+// --- Error ---
+socket.on('errorMsg', (msg) => alert(msg));
+</script>
+
 
 </body>
 </html>
