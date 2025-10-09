@@ -26,13 +26,13 @@ function generateJoinCode() {
   let code = "";
   for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
   return code;
-}
+} // end of generateJoinCode()
 
 // Centralized player state updater
 function updatePlayerStatus(session, playerId, status) {
   if (!session || !session.playerStates[playerId]) return;
   session.playerStates[playerId].status = status;
-}
+} // end of updatePlayerStatus()
 
 // Broadcast player states to all in the session
 function broadcastPlayerStates(session) {
@@ -43,12 +43,12 @@ function broadcastPlayerStates(session) {
     connected: !!io.sockets.sockets.get(p.id)
   }));
   io.to(session.joinCode).emit('updatePlayerStates', states);
-}
+} // end of broadcastPlayerStates()
 
 // Get all connected players
 function getConnectedPlayers(session) {
   return session.players.filter(p => io.sockets.sockets.get(p.id));
-}
+} // end of getConnectedPlayers()
 
 // === Routes ===
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
@@ -99,7 +99,7 @@ io.on('connection', (socket) => {
     socket.join(joinCode);
     socket.emit('gameCreated', { joinCode, players: currentSession.players });
     broadcastPlayerStates(currentSession);
-  });
+  }); // end of socket.on('createGame')
 
   // --- Join Game ---
   socket.on('joinGame', ({ playerName, joinCode }) => {
@@ -116,7 +116,7 @@ io.on('connection', (socket) => {
     io.to(joinCode).emit('updateLobby', currentSession.players);
     broadcastPlayerStates(currentSession);
     socket.emit('gameJoined', { joinCode, players: currentSession.players });
-  });
+  }); // end of socket.on('joinGame')
 
   // --- Start Game (Leader only) ---
   socket.on('startGame', () => {
@@ -130,7 +130,7 @@ io.on('connection', (socket) => {
       round: currentSession.currentRound,
       prompt: currentSession.prompt
     });
-  });
+  }); // end of socket.on('startGame')
 
   // --- Submit Answer ---
   socket.on('submitAnswer', ({ answer }) => {
@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('waitingForPlayers');
     }
-  });
+  }); // end of socket.on('submitAnswer')
 
   // --- Submit Vote ---
   socket.on('submitVote', ({ answer }) => {
@@ -200,55 +200,87 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('waitingForVotes');
     }
-  });
+  }); // end of socket.on('submitVote')
 
-// --- Next Round (Leader only) ---
-socket.on('nextRound', async () => {
-  try {
-    if (!currentSession) return;
-    if (socket.id !== currentSession.leaderId) return;
-
-    currentSession.currentRound++;
-
-    // If all rounds complete → Final Results
-    if (currentSession.currentRound > currentSession.numRounds) {
-      console.log('Game complete, sending final results');
-      io.to(currentSession.joinCode).emit('finalResults', {
-        players: currentSession.players
-      });
-      currentSession = null;
-      return;
-    }
-
-    // Reset round data
-    currentSession.answers = {};
-    currentSession.votes = {};
-    currentSession.answerStage = true;
-    currentSession.votingStage = false;
-
-    // New question
-    let prompt;
+  // --- Next Round (Leader only) ---
+  socket.on('nextRound', async () => {
     try {
-      prompt = await generatePrompt("questionables");
-      if (!prompt || prompt.startsWith("Default prompt")) prompt = getRandomUnusedQuestion();
+      if (!currentSession) return;
+      if (socket.id !== currentSession.leaderId) return;
+
+      currentSession.currentRound++;
+
+      // If all rounds complete → Final Results
+      if (currentSession.currentRound > currentSession.numRounds) {
+        console.log('Game complete, sending final results');
+        io.to(currentSession.joinCode).emit('finalResults', {
+          players: currentSession.players
+        });
+        currentSession = null;
+        return;
+      }
+
+      // Reset round data
+      currentSession.answers = {};
+      currentSession.votes = {};
+      currentSession.answerStage = true;
+      currentSession.votingStage = false;
+
+      // New question
+      let prompt;
+      try {
+        prompt = await generatePrompt("questionables");
+        if (!prompt || prompt.startsWith("Default prompt")) prompt = getRandomUnusedQuestion();
+      } catch (err) {
+        console.error("Groq error:", err);
+        prompt = getRandomUnusedQuestion();
+      }
+      currentSession.prompt = prompt;
+
+      // Update player statuses
+      currentSession.players.forEach(p => updatePlayerStatus(currentSession, p.id, 'Answering'));
+      broadcastPlayerStates(currentSession);
+
+      io.to(currentSession.joinCode).emit('newQuestion', {
+        round: currentSession.currentRound,
+        prompt: currentSession.prompt
+      });
     } catch (err) {
-      console.error("Groq error:", err);
-      prompt = getRandomUnusedQuestion();
+      console.error('Error in nextRound:', err);
     }
-    currentSession.prompt = prompt;
+  }); // end of socket.on('nextRound')
 
-    // Update player statuses
-    currentSession.players.forEach(p => updatePlayerStatus(currentSession, p.id, 'Answering'));
-    broadcastPlayerStates(currentSession);
+  // --- Regenerate Question (Leader only) ---
+  socket.on('regenerate_question', async (roomCode) => {
+    try {
+      if (!currentSession) return;
+      if (socket.id !== currentSession.leaderId) return;
 
-    io.to(currentSession.joinCode).emit('newQuestion', {
-      round: currentSession.currentRound,
-      prompt: currentSession.prompt
-    });
-  } catch (err) {
-    console.error('Error in nextRound:', err);
-  }
-});
+      console.log(`Leader requested new question for room ${roomCode}`);
+
+      let newPrompt;
+      try {
+        newPrompt = await generatePrompt("questionables");
+        if (!newPrompt || newPrompt.startsWith("Default prompt")) {
+          newPrompt = getRandomUnusedQuestion();
+        }
+      } catch (err) {
+        console.error("Groq error:", err);
+        newPrompt = getRandomUnusedQuestion();
+      }
+
+      currentSession.prompt = newPrompt;
+
+      io.to(currentSession.joinCode).emit('newQuestion', {
+        round: currentSession.currentRound,
+        prompt: currentSession.prompt
+      });
+
+    } catch (err) {
+      console.error('Error regenerating question:', err);
+      socket.emit('error_message', 'Failed to regenerate question.');
+    }
+  }); // end of socket.on('regenerate_question')
 
   // --- Disconnect ---
   socket.on('disconnect', () => {
@@ -261,8 +293,9 @@ socket.on('nextRound', async () => {
     } else {
       broadcastPlayerStates(currentSession);
     }
-  });
-});
+  }); // end of socket.on('disconnect')
+
+}); // end of io.on('connection')
 
 // --- Start server ---
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

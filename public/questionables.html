@@ -5,7 +5,7 @@
   <title>Questionables</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
     .hidden { display: none; }
     .live-region { position: absolute; left: -9999px; height: 1px; width: 1px; overflow: hidden; }
     button { margin: 5px; }
@@ -17,87 +17,81 @@
 <h3>Player Status</h3>
 <ul id="playerStatusList"></ul>
 
-<div id="waiting-section" style="display: none;">
+<div id="waiting-section" class="hidden">
   <h2>Waiting for others to answer...</h2>
   <ul id="answer-status-list"></ul>
-  <button id="continue-btn" style="display: none;">Continue</button>
+  <button id="continue-btn">Continue</button>
 </div>
 
-  <!-- NVDA Live Region -->
-  <div id="liveRegion" class="live-region" aria-live="polite"></div>
+<!-- NVDA Live Region -->
+<div id="liveRegion" class="live-region" aria-live="polite"></div>
 
-  <!-- Game selection -->
-  <div id="gameSetup">
-    <h2>Questionables</h2>
+<!-- Game setup -->
+<div id="gameSetup">
+  <h2>Questionables</h2>
 
-    <div id="createSection">
-      <h3>Create Game</h3>
-      <label>Player Name: <input id="createName" type="text"></label><br>
-      <label>Number of Rounds: <input id="numRounds" type="number" value="3" min="1"></label><br>
-      <button id="createGameBtn">Create Game</button>
-    </div>
-
-    <div id="joinSection">
-      <h3>Join Game</h3>
-      <label>Player Name: <input id="joinName" type="text"></label><br>
-      <label>Join Code: <input id="joinCode" type="text" maxlength="4"></label><br>
-      <button id="joinGameBtn">Join Game</button>
-    </div>
+  <div id="createSection">
+    <h3>Create Game</h3>
+    <label>Player Name: <input id="createName" type="text"></label><br>
+    <label>Number of Rounds: <input id="numRounds" type="number" value="3" min="1"></label><br>
+    <button id="createGameBtn">Create Game</button>
   </div>
 
-  <!-- Lobby -->
-  <div id="lobby" class="hidden">
-    <h2>Lobby - <span id="lobbyCode"></span></h2>
-    <h3>Players:</h3>
-    <ul id="playerList"></ul>
-    <button id="startGameBtn" class="hidden">Start Game</button>
+  <div id="joinSection">
+    <h3>Join Game</h3>
+    <label>Player Name: <input id="joinName" type="text"></label><br>
+    <label>Join Code: <input id="joinCode" type="text" maxlength="4"></label><br>
+    <button id="joinGameBtn">Join Game</button>
   </div>
+</div>
 
-  <!-- Question -->
-  <div id="questionStage" class="hidden">
-    <h2>Round <span id="currentRound"></span></h2>
-    <p id="prompt"></p>
-    <label>Your Answer: <input id="answerInput" type="text"></label>
-    <button id="submitAnswerBtn">Submit Answer</button>
-  <p id="waitingAnswer" class="hidden">
-  Waiting for others to answer...
-</p>
-<ul id="answerStatusList" class="hidden"></ul>
+<!-- Lobby -->
+<div id="lobby" class="hidden">
+  <h2>Lobby - <span id="lobbyCode"></span></h2>
+  <h3>Players:</h3>
+  <ul id="playerList"></ul>
+  <button id="startGameBtn" class="hidden">Start Game</button>
+</div>
 
-  </div>
+<!-- Question Stage -->
+<div id="questionStage" class="hidden">
+  <h2>Round <span id="currentRound"></span></h2>
+  <p id="prompt"></p>
+  <label>Your Answer: <input id="answerInput" type="text"></label>
+  <button id="submitAnswerBtn">Submit Answer</button>
+  <p id="waitingAnswer" class="hidden">Waiting for others to answer...</p>
+  <button id="regenerateBtn" class="hidden">Regenerate Question</button>
+  <ul id="answerStatusList" class="hidden"></ul>
+</div>
 
-  <!-- Voting -->
-  <div id="votingStage" class="hidden">
-    <h2>Vote!</h2>
-    <p id="votingPrompt"></p>
-    <div id="voteButtons"></div>
-    <p id="waitingVote" class="hidden">Waiting for others to vote...</p>
-  </div>
+<!-- Voting Stage -->
+<div id="votingStage" class="hidden">
+  <h2>Vote!</h2>
+  <p id="votingPrompt"></p>
+  <div id="voteButtons"></div>
+  <p id="waitingVote" class="hidden">Waiting for others to vote...</p>
+</div>
 
-  <!-- Results -->
-  <div id="resultsStage" class="hidden">
-    <h2>Round Results</h2>
-    <p id="resultsPrompt"></p>
-    <ul id="resultsList"></ul>
-    <button id="continueBtn" class="hidden">Continue</button>
-  </div>
+<!-- Round Results -->
+<div id="resultsStage" class="hidden">
+  <h2>Round Results</h2>
+  <p id="resultsPrompt"></p>
+  <ul id="resultsList"></ul>
+  <button id="continueBtn" class="hidden">Continue</button>
+</div>
 
-  <!-- Final Results -->
-  <div id="finalResultsStage" class="hidden">
-    <h2>Final Results</h2>
-    <ul id="finalScores"></ul>
-    <button id="returnHomeBtn">Return to Home</button>
-  </div>
+<!-- Final Results -->
+<div id="finalResultsStage" class="hidden">
+  <h2>Final Results</h2>
+  <ul id="finalScores"></ul>
+  <button id="returnHomeBtn">Return to Home</button>
+</div>
 
-  <script>
-const socket = io(window.location.origin, {
-  transports: ['websocket', 'polling']
-});
+<script>
+const socket = io(window.location.origin, { transports: ['websocket', 'polling'] });
 
 const liveRegion = document.getElementById('liveRegion');
-function announce(message) {
-  liveRegion.textContent = message;
-}
+function announce(message) { liveRegion.textContent = message; }
 
 // Sections
 const gameSetup = document.getElementById('gameSetup');
@@ -113,6 +107,7 @@ const promptEl = document.getElementById('prompt');
 const answerInput = document.getElementById('answerInput');
 const submitAnswerBtn = document.getElementById('submitAnswerBtn');
 const waitingAnswer = document.getElementById('waitingAnswer');
+let currentRoomCode = null;
 
 const votingStage = document.getElementById('votingStage');
 const votingPrompt = document.getElementById('votingPrompt');
@@ -139,17 +134,18 @@ createGameBtn.addEventListener('click', () => {
   const numRounds = parseInt(document.getElementById('numRounds').value, 10) || 3;
   if (!playerName) return alert('Enter a player name.');
   socket.emit('createGame', { playerName, numRounds });
-});
+}); // end createGameBtn click
 
 joinGameBtn.addEventListener('click', () => {
   const playerName = document.getElementById('joinName').value.trim();
   const joinCode = document.getElementById('joinCode').value.trim().toUpperCase();
   if (!playerName || !joinCode) return alert('Enter a name and join code.');
   socket.emit('joinGame', { playerName, joinCode });
-});
+}); // end joinGameBtn click
 
 // --- Lobby ---
 socket.on('gameCreated', ({ joinCode, players }) => {
+  currentRoomCode = joinCode;
   myPlayerId = socket.id;
   isLeader = true;
   gameSetup.classList.add('hidden');
@@ -157,9 +153,10 @@ socket.on('gameCreated', ({ joinCode, players }) => {
   lobbyCode.textContent = joinCode;
   startGameBtn.classList.remove('hidden');
   announce(`Game created. Join code is ${joinCode}`);
-});
+}); // end socket.on('gameCreated')
 
 socket.on('gameJoined', ({ joinCode }) => {
+  currentRoomCode = joinCode;
   myPlayerId = socket.id;
   isLeader = false;
   gameSetup.classList.add('hidden');
@@ -167,41 +164,39 @@ socket.on('gameJoined', ({ joinCode }) => {
   lobbyCode.textContent = joinCode;
   startGameBtn.classList.add('hidden');
   announce(`Joined game. Code is ${joinCode}`);
-});
+}); // end socket.on('gameJoined')
 
 startGameBtn.addEventListener('click', () => {
   socket.emit('startGame');
-});
+}); // end startGameBtn click
 
 // --- Persistent Player Status ---
 socket.on('updatePlayerStates', (players) => {
   playerStatusList.innerHTML = '';
   let waitingCount = 0;
-
   players.forEach(p => {
     const li = document.createElement('li');
     let statusText = '';
-
     if (!p.connected) statusText = '❌ Disconnected';
     else if (p.status === 'Answering') statusText = '⏳ Answering';
     else if (p.status === 'Voting') statusText = '⏳ Voting';
     else if (p.status === 'Waiting for others to Answer') statusText = '✅ Answered';
     else if (p.status === 'Waiting for others to Vote') statusText = '✅ Voted';
     else statusText = 'Ready';
-
     li.textContent = `${p.name}${p.isLeader ? ' (Leader)' : ''}: ${statusText}`;
     playerStatusList.appendChild(li);
-
     if (statusText.includes('⏳')) waitingCount++;
-  });
+  }); // end players.forEach
 
-  // Announce for screen reader
   if (waitingCount === 0) announce('All players are ready.');
   else announce(`${waitingCount} players are still responding.`);
-});
+}); // end socket.on('updatePlayerStates')
 
 // --- Question Stage ---
 socket.on('newQuestion', ({ round, prompt }) => {
+  if (isLeader) regenerateBtn.classList.remove('hidden');
+  else regenerateBtn.classList.add('hidden');
+
   lobby.classList.add('hidden');
   resultsStage.classList.add('hidden');
   votingStage.classList.add('hidden');
@@ -215,8 +210,9 @@ socket.on('newQuestion', ({ round, prompt }) => {
   waitingAnswer.classList.add('hidden');
 
   announce(`Round ${round} question: ${prompt}`);
-});
+}); // end socket.on('newQuestion')
 
+// --- Submit Answer ---
 submitAnswerBtn.addEventListener('click', () => {
   const answer = answerInput.value.trim();
   if (!answer) return;
@@ -225,10 +221,11 @@ submitAnswerBtn.addEventListener('click', () => {
   submitAnswerBtn.disabled = true;
   waitingAnswer.classList.remove('hidden');
   announce('Answer submitted. Waiting for others.');
-});
+}); // end submitAnswerBtn click
 
 // --- Voting Stage ---
 socket.on('startVoting', ({ prompt, answers }) => {
+  regenerateBtn.classList.add('hidden');
   questionStage.classList.add('hidden');
   votingStage.classList.remove('hidden');
   votingPrompt.textContent = prompt;
@@ -243,55 +240,93 @@ socket.on('startVoting', ({ prompt, answers }) => {
       Array.from(voteButtons.children).forEach(b => b.disabled = true);
       waitingVote.classList.remove('hidden');
       announce('You voted. Waiting for others.');
-    });
+    }); // end btn click
     voteButtons.appendChild(btn);
-  });
+  }); // end answers.forEach
 
   announce(`Voting started for question: ${prompt}`);
-});
+}); // end socket.on('startVoting')
 
 // --- Round Results ---
 socket.on('roundResults', ({ prompt, answers, round }) => {
   votingStage.classList.add('hidden');
   resultsStage.classList.remove('hidden');
-
   resultsPrompt.textContent = prompt;
   resultsList.innerHTML = '';
   answers.forEach(a => {
     const li = document.createElement('li');
     li.textContent = `${a.name}: ${a.answer} (${a.votes} votes)`;
     resultsList.appendChild(li);
-  });
-
+  }); // end answers.forEach
   continueBtn.style.display = isLeader ? 'block' : 'none';
   announce(`Round ${round} results displayed.`);
-});
+}); // end socket.on('roundResults')
 
-continueBtn.addEventListener('click', () => {
-  //socket.emit('continueGame');
-  socket.emit('nextRound');
-  
-});
+// --- Continue Button ---
+continueBtn.addEventListener('click', () => { socket.emit('nextRound'); }); // end continueBtn click
 
+// --- Final Results ---
 socket.on('finalResults', ({ players }) => {
   resultsStage.classList.add('hidden');
   finalResultsStage.classList.remove('hidden');
-
   finalScores.innerHTML = '';
   players.forEach(p => {
     const li = document.createElement('li');
     li.textContent = `${p.name}: ${p.score}`;
     finalScores.appendChild(li);
-  });
-
+  }); // end players.forEach
   announce('Final scores displayed.');
-});
+}); // end socket.on('finalResults')
 
+// --- Error Messages ---
+socket.on('errorMsg', (msg) => alert(msg)); // end socket.on('errorMsg')
 
-// --- Error ---
-socket.on('errorMsg', (msg) => alert(msg));
+// --- Regenerate Question ---
+const regenerateBtn = document.getElementById('regenerateBtn');
+let currentStage = 'waiting';
+
+socket.on('game_stage_update', (stage) => { currentStage = stage; updateUI(); }); // end socket.on('game_stage_update')
+
+function updateUI() {
+  if (isLeader && currentStage === 'answer') regenerateBtn.classList.remove('hidden');
+  else regenerateBtn.classList.add('hidden');
+} // end updateUI
+
+regenerateBtn.addEventListener('click', () => { socket.emit('regenerate_question', currentRoomCode); }); // end regenerateBtn click
+
+socket.on('new_question_generated', (questionText) => {
+  const questionElement = document.getElementById('prompt');
+  if (questionElement) questionElement.textContent = questionText;
+  const answerInputEl = document.getElementById('answerInput');
+  if (answerInputEl) answerInputEl.value = '';
+}); // end socket.on('new_question_generated')
+
+// --- Return to Home from Final Results ---
+returnHomeBtn.addEventListener('click', () => {
+  // Hide all stages
+  finalResultsStage.classList.add('hidden');
+  resultsStage.classList.add('hidden');
+  questionStage.classList.add('hidden');
+  votingStage.classList.add('hidden');
+  lobby.classList.add('hidden');
+
+  // Show game setup
+  gameSetup.classList.remove('hidden');
+
+  // Clear inputs
+  document.getElementById('createName').value = '';
+  document.getElementById('joinName').value = '';
+  document.getElementById('joinCode').value = '';
+
+  // Clear any room/session info
+  currentRoomCode = null;
+  myPlayerId = null;
+  isLeader = false;
+  playerStatusList.innerHTML = '';
+  announce('Returned to home screen. You can create or join a new game.');
+}); // end returnHomeBtn click
+
 </script>
-
 
 </body>
 </html>
