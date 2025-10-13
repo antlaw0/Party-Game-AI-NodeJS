@@ -16,6 +16,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(__dirname));
 app.use('/lib', express.static(path.join(__dirname, 'lib')));
+// === Sandbox Route ===
+app.use(express.json());
+
 
 // === In-memory session (currently only one session allowed) ===
 let currentSession = null;
@@ -51,6 +54,8 @@ function getConnectedPlayers(session) {
 } // end of getConnectedPlayers()
 
 // === Routes ===
+
+
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 app.get('/questionables', (req, res) => res.sendFile(__dirname + '/questionables.html'));
 
@@ -296,6 +301,68 @@ io.on('connection', (socket) => {
   }); // end of socket.on('disconnect')
 
 }); // end of io.on('connection')
+
+app.post('/sandbox-groq', async (req, res) => {
+  const { prompt, temperature, max_tokens } = req.body;
+
+  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    return res.status(400).json({ error: true, message: "Missing or invalid prompt." });
+  }
+
+  const tempValue = typeof temperature === 'number' ? temperature : 1.0;
+  const maxTokensValue = typeof max_tokens === 'number' ? max_tokens : 150;
+
+  const GROQ_API_KEY = process.env.GROQ_PARTYWEBGAME_API_KEY;
+  const GROQ_CHAT_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+  const ai_model = "llama-3.3-70b-versatile";
+
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(GROQ_CHAT_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: ai_model,
+        messages: [{ role: "user", content: prompt }],
+        temperature: tempValue,
+        max_tokens: maxTokensValue
+      }),
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Groq Sandbox Error:", errorText);
+      return res.status(response.status).json({
+        error: true,
+        message: `Groq API Error (${response.status})`,
+        details: errorText
+      });
+    }
+
+    const data = await response.json();
+
+    res.json({
+      text: data?.choices?.[0]?.message?.content?.trim() || "(No content returned)",
+      raw: data,
+      usage: data?.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      duration_ms: duration
+    });
+
+  } catch (err) {
+    console.error("Groq Sandbox Exception:", err);
+    res.status(500).json({
+      error: true,
+      message: "Internal error calling Groq API",
+      details: err.message
+    });
+  }
+});
 
 // --- Start server ---
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

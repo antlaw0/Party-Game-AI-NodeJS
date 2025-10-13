@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Groq Sandbox</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+      background: #111;
+      color: #eee;
+    }
+    textarea {
+      width: 100%;
+      height: 120px;
+      font-size: 16px;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      resize: vertical;
+      background: #222;
+      color: #fff;
+    }
+    button {
+      padding: 10px 18px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .tabs {
+      margin-top: 20px;
+    }
+    .tab {
+      display: inline-block;
+      padding: 8px 16px;
+      background: #333;
+      cursor: pointer;
+      border-radius: 8px 8px 0 0;
+      margin-right: 4px;
+    }
+    .tab.active {
+      background: #4CAF50;
+    }
+    .output {
+      border: 1px solid #333;
+      padding: 15px;
+      border-radius: 0 8px 8px 8px;
+      background: #1b1b1b;
+      white-space: pre-wrap;
+      font-family: monospace;
+      margin-bottom: 15px;
+    }
+    .tokens {
+      margin-top: 10px;
+      background: #222;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .error {
+      color: #ff4d4d;
+      margin-top: 10px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Groq Sandbox</h1>
+  <p>Enter any prompt to test Groq responses and token usage.</p>
+
+  <textarea id="promptInput" placeholder="Type your prompt here..."></textarea>
+
+<div style="margin-top:10px;">
+  <label for="temperature">Temperature: </label>
+  <input type="number" id="temperature" min="0" max="2" step="0.1" value="1.0" style="width:60px;">
+  &nbsp;&nbsp;
+  <label for="maxTokens">Max Tokens: </label>
+  <input type="number" id="maxTokens" min="1" max="1000" step="1" value="150" style="width:70px;">
+</div>
+
+<button id="sendBtn">Send to Groq</button>
+<div id="errorBox" class="error"></div>
+
+  <div class="tabs">
+    <div id="tabClean" class="tab active">🧠 Clean Output</div>
+    <div id="tabRaw" class="tab">🧾 Raw JSON</div>
+  </div>
+
+  <div id="outputBox" class="output"></div>
+
+  <div id="tokensBox" class="tokens"></div>
+
+  <script>
+const sendBtn = document.getElementById('sendBtn');
+const promptInput = document.getElementById('promptInput');
+const outputBox = document.getElementById('outputBox');
+const errorBox = document.getElementById('errorBox');
+const tokensBox = document.getElementById('tokensBox');
+const tabClean = document.getElementById('tabClean');
+const tabRaw = document.getElementById('tabRaw');
+
+let lastResponse = null;
+
+function updateDisplay() {
+  if (!lastResponse) return;
+  if (tabClean.classList.contains('active')) {
+    outputBox.textContent = lastResponse.text || "(No content)";
+  } else {
+    outputBox.textContent = JSON.stringify(lastResponse.raw, null, 2);
+  }
+}
+
+async function sendPrompt() {
+  const prompt = promptInput.value.trim();
+  if (!prompt) return alert("Please enter a prompt first.");
+
+  const temperature = parseFloat(document.getElementById('temperature').value) || 1.0;
+  const maxTokens = parseInt(document.getElementById('maxTokens').value) || 150;
+
+  outputBox.textContent = "";
+  tokensBox.textContent = "";
+  errorBox.textContent = "";
+  lastResponse = null;
+
+  sendBtn.disabled = true;
+  sendBtn.textContent = "Sending...";
+
+  try {
+    const res = await fetch("/sandbox-groq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, temperature, max_tokens: maxTokens })
+    });
+
+    const data = await res.json();
+    lastResponse = data;
+
+    if (!res.ok || data.error) {
+      errorBox.textContent = `❌ Error: ${data.message || res.statusText}\n${data.details || ""}`;
+    } else {
+      updateDisplay();
+      tokensBox.innerHTML = `
+        <b>Tokens:</b><br>
+        Prompt: ${data.usage.prompt_tokens}<br>
+        Completion: ${data.usage.completion_tokens}<br>
+        Total: ${data.usage.total_tokens}<br>
+        Duration: ${data.duration_ms} ms
+      `;
+    }
+  } catch (err) {
+    errorBox.textContent = `❌ Network Error: ${err.message}`;
+  } finally {
+    sendBtn.disabled = false;
+    sendBtn.textContent = "Send to Groq";
+  }
+}
+
+tabClean.addEventListener('click', () => {
+  tabClean.classList.add('active');
+  tabRaw.classList.remove('active');
+  updateDisplay();
+});
+
+tabRaw.addEventListener('click', () => {
+  tabRaw.classList.add('active');
+  tabClean.classList.remove('active');
+  updateDisplay();
+});
+
+sendBtn.addEventListener('click', sendPrompt);
+</script>
+
+</body>
+</html>
